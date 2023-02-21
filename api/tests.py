@@ -5,9 +5,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import Group, Image, Size, Thumbnail, TemporaryLinks
-from .serializers import ImageSerializer, GroupSerializer
+from .serializers import ImageSerializer, GroupSerializer, ThumbnailSerializer
 from PIL import Image as Img
 from io import BytesIO
+import json
 
 
 class ImageCreateTest(APITestCase):
@@ -44,7 +45,6 @@ class ImageListTest(APITestCase):
         self.user = User.objects.create_user(
             username='testing_user',
             password='testing4321',
-
         )
 
         self.user_no_image_objects = User.objects.create_user(
@@ -127,6 +127,8 @@ class ImageDetailTest(APITestCase):
         self.group_with_permission.user_set.add(self.valid_user_no_permission)
         response = self.client.get(f'/api/get-original-image/{self.image_one.pk}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        serializer = ImageSerializer(self.image_one)
+        self.assertEqual(response.data, serializer.data)
 
 
 class GetAnySizeThumbnailTest(APITestCase):
@@ -167,10 +169,11 @@ class GetAnySizeThumbnailTest(APITestCase):
         self.group_basic.size.add(self.size_200)
         self.group_premium.size.add(self.size_200, self.size_400)
         self.group_enterprise.size.add(self.size_200, self.size_400)
-
         self.image_one = Image.objects.create(image=temporary_image(), author=self.valid_user)
+        self.thumbnail_200 = Thumbnail.objects.create(original_image=self.image_one, height=self.size_200.height)
+        self.thumbnail_400 = Thumbnail.objects.create(original_image=self.image_one, height=self.size_400.height)
 
-    def test_get_thumbnail_with_permission(self):
+    def test_get_thumbnail_200_with_permission(self):
         self.client.login(username='testing_user_valid', password='testing4321')
         self.valid_user.groups.clear()
         self.group_premium.user_set.add(self.valid_user)
@@ -178,8 +181,10 @@ class GetAnySizeThumbnailTest(APITestCase):
         self.group_basic.user_set.add(self.valid_user)
         response = self.client.get(f'/api/get-thumbnail-custom/{self.image_one.pk}/{self.size_200.height}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        serializer = ThumbnailSerializer(self.thumbnail_200)
+        self.assertEqual(response.data, serializer.data)
 
-    def test_get_thumbnail_without_permission(self):
+    def test_get_thumbnail_200_without_permission(self):
         self.client.login(username='testing_user_valid', password='testing4321')
         self.valid_user.groups.clear()
         self.group_basic.user_set.add(self.valid_user)
@@ -209,8 +214,10 @@ class GroupCreateTest(APITestCase):
         )
 
         self.group_data_valid = {
-            'name': 'test_group_3_values',
-            'size': [100, 200, 300]
+            "name": "Test_User",
+            "size": [100, 500, 102],
+            "allow_original_image": False,
+            "allow_expiring_link": False
         }
 
         self.group_data_invalid = {
@@ -219,29 +226,44 @@ class GroupCreateTest(APITestCase):
 
     def test_unauthenticated_user_create_group(self):
         self.client.logout()
-        response = self.client.post('/api/create-group/', self.group_data_valid)
+        response = self.client.post(
+            '/api/create-group/',
+            data=json.dumps(self.group_data_valid),
+            content_type='application/json'
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_non_admin_user_create_group(self):
         self.client.login(username='testing_user', password='testing4321')
-        response = self.client.post('/api/create-group/', self.group_data_valid)
+        response = self.client.post(
+            '/api/create-group/',
+            data=json.dumps(self.group_data_valid),
+            content_type='application/json'
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.client.logout()
 
     def test_admin_user_create_group(self):
         self.client.login(username='admin', password='testing4321')
-        response = self.client.post('/api/create-group/', self.group_data_valid)
+        response = self.client.post(
+            '/api/create-group/',
+            data=json.dumps(self.group_data_valid),
+            content_type='application/json'
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Group.objects.count(), 1)
         group = Group.objects.first()
         self.assertEqual(group.name, self.group_data_valid['name'])
         self.assertEqual(group.size.count(), len(self.group_data_valid['size']))
 
-    # def test_upload_image_with_invalid_data(self):
-    #     url = reverse('group_create')
-    #     self.client.force_authenticate(user=self.admin)
-    #     response = self.client.post(url, self.invalid_payload)
-    #     self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    def test_upload_image_with_invalid_data(self):
+        self.client.login(username='admin', password='testing4321')
+        response = self.client.post(
+            '/api/create-group/',
+            data=json.dumps(self.group_data_invalid),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class GroupDetailTest(APITestCase):
@@ -326,7 +348,6 @@ class GroupListTest(APITestCase):
         self.client.login(username='admin', password='testing4321')
         response = self.client.get('/api/get-groups-list/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-
 
 
 class TemporaryImageLinkCreateTest(APITestCase):

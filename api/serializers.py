@@ -11,6 +11,9 @@ class ImageSerializer(serializers.ModelSerializer):
         model = Image
         fields = ['id', 'created', 'image', 'author']
 
+    def get_image(self, obj):
+        return obj.image.url
+
 
 class ThumbnailSerializer(serializers.ModelSerializer):
 

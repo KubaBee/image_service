@@ -76,15 +76,14 @@ class GroupCreate(generics.CreateAPIView):
         size_objects = []
         for height in size_data:
             size_obj, created = Size.objects.get_or_create(height=height)
-            size_objects.append(size_obj)
+            size_objects.append(size_obj.pk)
 
-        # create a new serializer with modified data
-        data['size'] = [size_obj.pk for size_obj in size_objects]
+        data['size'] = size_objects
+
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
 
-        group_obj = serializer.save()
-        group_obj.size.set(size_objects)
+        serializer.save()
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=201, headers=headers)

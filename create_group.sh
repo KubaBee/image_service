@@ -1,6 +1,5 @@
-python manage.py migrate
+#!/bin/bash
 
-# Create new group
 python manage.py shell << END
 from django.contrib.auth.models import Group
 from api.models import Size
