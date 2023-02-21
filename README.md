@@ -1,4 +1,4 @@
-#How to set up this project? 
+# How to set up this project? 
 
 In order to set up a project follow the steps below:
 
