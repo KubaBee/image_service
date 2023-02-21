@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/image_sevice
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      DEBUG: 'true'
+      DATABASE_URL: sqlite:////code/db.sqlite3
